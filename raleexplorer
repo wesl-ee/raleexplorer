@@ -1,0 +1,68 @@
+#!/bin/bash
+# raleexplorer - Browse an RAL textboard on the terminal
+# Terminal user-interfaces are cool!
+#
+# Wesley Coakley (2019) (X11 License)
+# https://github.com/wesleycoakley/raleexplorer
+
+INPUT=/tmp/raleexplorer-in.sh.$$
+OUTPUT=/tmp/raleexplorer-in.$$
+
+trap "rm $INPUT $OUTPUT; exit" SIGHUP SIGINT SIGTERM
+
+# Display the text in $OUTPUT
+function display_output() {
+	local h=${1-10}
+	local w=${2-41}
+	local t=${3-Output}
+	dialog --backtitle "RalEExplorer" \
+		--title "${t}" \
+		--clear \
+		--msgbox "$(<$OUTPUT)" ${h} ${w}
+}
+
+# Present a menu of items and stash the user selection in $INPUT
+function display_menu() {
+	local -n r=$1
+	dialog --backtitle "RalEExplorer - Continuities" \
+		--title "Choose your Experience" \
+		--menu "" ${h} ${w} 25 \
+		"${rows[@]}" 2>$INPUT
+}
+
+# Present the list of Continuities to the user
+function display_continuities() {
+	local h=20
+	local w=70
+	local rows=()
+
+	# Process API feedback
+	while read -r line; do
+		# Skip blank lines
+		if [ -z "$line" ]; then
+			continue
+		fi
+
+		# Transform `ral` array into Bash array
+		eval row=$line
+
+		# Select the relevant info we want to present in our menu
+		local name=${row[0]}
+		local description=${row[1]}
+
+		# Add this as a row in our menu
+		local dialogrow=("$name" "$description")
+		rows+=("${dialogrow[@]}")
+
+	# Piped from `ral` utility
+	done < <(ral view --format=array)
+
+	display_menu rows
+}
+
+# Simply demonstration...
+display_continuities
+
+# Cleanup...
+rm $INPUT $OUTPUT
+
