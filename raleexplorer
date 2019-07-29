@@ -5,10 +5,12 @@
 # Wesley Coakley (2019) (X11 License)
 # https://github.com/wesleycoakley/raleexplorer
 
-INPUT=/tmp/raleexplorer-in.sh.$$
-OUTPUT=/tmp/raleexplorer-in.$$
+INPUT=/tmp/raleexplorer-in.$$
+OUTPUT=/tmp/raleexplorer-out.$$
+HEIGHT=20
+WIDTH=70
 
-trap "rm $INPUT $OUTPUT; exit" SIGHUP SIGINT SIGTERM
+trap "rm -f $INPUT $OUTPUT; exit" SIGHUP SIGINT SIGTERM
 
 # Display the text in $OUTPUT
 function display_output() {
@@ -23,17 +25,29 @@ function display_output() {
 
 # Present a menu of items and stash the user selection in $INPUT
 function display_menu() {
-	local -n r=$1
-	dialog --backtitle "RalEExplorer - Continuities" \
-		--title "Choose your Experience" \
-		--menu "" ${h} ${w} 25 \
-		"${rows[@]}" 2>$INPUT
+	# Parameters
+	local backtitle=$1; shift
+	local title=$1; shift
+	local cancelstring=$1; shift
+	local rows=("$@")
+
+	if [ -z $cancelstring ]; then
+		dialog --backtitle "$backtitle" \
+			--title "$title" \
+			--no-cancel \
+			--menu "" $HEIGHT $WIDTH 25 \
+			"${rows[@]}" 2>$INPUT
+	else
+		dialog --backtitle "$backtitle" \
+			--title "$title" \
+			--cancel-label "$cancelstring" \
+			--menu "" $HEIGHT $WIDTH 25 \
+			"${rows[@]}" 2>$INPUT
+	fi
 }
 
 # Present the list of Continuities to the user
 function display_continuities() {
-	local h=20
-	local w=70
 	local rows=()
 
 	# Process API feedback
@@ -57,12 +71,13 @@ function display_continuities() {
 	# Piped from `ral` utility
 	done < <(ral view --format=array)
 
-	display_menu rows
+	display_menu "RalEExplorer - Continuities" "Choose your Experience" "" "${rows[@]}"
 }
 
 # Simply demonstration...
 display_continuities
+continuity="$(<$INPUT)"
 
 # Cleanup...
-rm $INPUT $OUTPUT
+rm -f $INPUT $OUTPUT
 
