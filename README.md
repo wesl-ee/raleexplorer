@@ -13,6 +13,7 @@ RalEExplorer depends on only the following utilities:
 - bash
 - dialog
 - My [ral](https://github.com/wesleycoakley/ral) utility
+- Stedolan's [jq](https://github.com/stedolan/jq) JSON processor
 
 License
 -------

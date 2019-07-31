@@ -7,8 +7,9 @@
 
 INPUT=/tmp/raleexplorer-in.$$
 OUTPUT=/tmp/raleexplorer-out.$$
-HEIGHT=20
-WIDTH=70
+LRMARGIN=15
+TOPBOTMARGIN=10
+BACKTITLE="RalEExplorer"
 
 trap "rm -f $INPUT $OUTPUT; exit" SIGHUP SIGINT SIGTERM
 
@@ -26,57 +27,160 @@ function display_output() {
 # Present a menu of items and stash the user selection in $INPUT
 function display_menu() {
 	# Parameters
-	local backtitle=$1; shift
 	local title=$1; shift
 	local cancelstring=$1; shift
 	local rows=("$@")
+
+	# Terminal size
+	local cols="$(($(tput cols)-$LRMARGIN))"
+	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
+
+
+	if [ -z $cancelstring ]; then
+		dialog --backtitle "$BACKTITLE" \
+			--title "$title" \
+			--no-cancel \
+			--menu "" $lines $cols 30 \
+			"${rows[@]}" 2>$INPUT
+	else
+		dialog --backtitle "$BACKTITLE" \
+			--title "$title" \
+			--cancel-label "$cancelstring" \
+			--menu "" $lines $cols 30 \
+			"${rows[@]}" 2>$INPUT
+	fi
+}
+
+# Present a checklist of items and stash the user selection in $INPUT
+function display_checklist() {
+	# Parameters
+	local title=$1; shift
+	local cancelstring=$1; shift
+	local rows=("$@")
+
+	# Terminal size
+	local cols="$(($(tput cols)-$LRMARGIN))"
+	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
 
 	if [ -z $cancelstring ]; then
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
 			--no-cancel \
-			--menu "" $HEIGHT $WIDTH 25 \
+			--checklist "" $lines $cols 30 \
 			"${rows[@]}" 2>$INPUT
 	else
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
 			--cancel-label "$cancelstring" \
-			--menu "" $HEIGHT $WIDTH 25 \
+			--checklist "" $lines $cols 30 \
 			"${rows[@]}" 2>$INPUT
 	fi
 }
 
+function construct_filter() {
+	printf '"'
+	for arg in $@; do
+		printf "\(.$arg)\n"
+	done
+	printf '"'
+}
+
+# Double-backslash escape all escape sequences in stdio
+function transform_json() { sed -e 's/\\\([a-z]\)/\\\\\1/g'; }
+
+# Reduce stdio to fit on one line
+function oneline() { sed -e 's/\(\\[trn]\)\+/ /g'; }
+
 # Present the list of Continuities to the user
 function display_continuities() {
-	local rows=()
+	# An array which will hold our parsed API data
+	local continuities=()
 
-	# Process API feedback
-	while read -r line; do
-		# Skip blank lines
-		if [ -z "$line" ]; then
-			continue
+	# Select the relevant info we want to present in our menu
+	local fields=("Name" "Description")
+	local filter=$(construct_filter "${fields[@]}")
+
+	# Scrape API data from `ral` tool
+	while read -r value; do
+		continuities+=("$value")
+	done < <(ral view --format=json |oneline |jq -j ".[]|$filter")
+
+	# Menu parameters
+	local title="Choose your Experience"
+	local canceltext=""
+
+	# Actually render the menu to the user
+	display_menu "$title" "$canceltext" "${continuities[@]}"
+}
+
+# Present a checklist of Years to the user
+function prompt_years() {
+	# System parameters
+	local continuity="$1"
+
+	# An array to hold the API data from our query
+	local years=()
+
+	# Select the relevant info we want to present in our menu
+	local fields=("Year" "Count")
+	local filter=$(construct_filter "${fields[@]}")
+
+	# Scrape API data from `ral` tool
+	local n=0
+	while read -r value; do
+		years+=("$value")
+
+		# Append extra arguments for each checklist item
+		((n++))
+		if [ $n -ge "${#fields[@]}" ]; then
+			# Do not autoselect anything
+			years+=("false")
+
+			# Rollover counter
+			n=0
 		fi
+	done < <(ral view --format=json "$continuity" |\
+		oneline |jq -j ".[]|$filter")
 
-		# Transform `ral` array into Bash array
-		eval row=$line
+	# Menu parameters
+	local title="[$continuity]"
+	local canceltext="Back"
 
-		# Select the relevant info we want to present in our menu
-		local name=${row[0]}
-		local description=${row[1]}
+	display_checklist "$title" "$canceltext" "${years[@]}"
+}
 
-		# Add this as a row in our menu
-		local dialogrow=("$name" "$description")
-		rows+=("${dialogrow[@]}")
+function prompt_topics() {
+	# System parameters
+	local continuity="$1"; shift
+	local year="$1"
 
-	# Piped from `ral` utility
-	done < <(ral view --format=array)
+	# An array to hold the API data from our query
+	local topics=()
 
-	display_menu "RalEExplorer - Continuities" "Choose your Experience" "" "${rows[@]}"
+	# Select the relevant info we want to present in our menu
+	local fields=("Topic" "Content")
+	local filter=$(construct_filter "${fields[@]}")
+
+	# Scrape API data from `ral` tool
+	local n=0
+	while read -r value; do
+		topics+=("$value")
+	done < <(ral view --format=json "$continuity" "$year" |\
+		oneline |jq -j ".[]|$filter")
+
+	# Menu parameters
+	local title="[$continuity/$year]"
+	local canceltext="Back"
+
+	display_menu "$title" "$canceltext" "${topics[@]}"
 }
 
 # Simply demonstration...
 display_continuities
 continuity="$(<$INPUT)"
+prompt_years $continuity
+years="$(<$INPUT)"
+prompt_topics "$continuity" "$years"
 
 # Cleanup...
 rm -f $INPUT $OUTPUT
