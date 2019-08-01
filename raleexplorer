@@ -13,15 +13,23 @@ BACKTITLE="RalEExplorer"
 
 trap "rm -f $INPUT $OUTPUT; exit" SIGHUP SIGINT SIGTERM
 
-# Display the text in $OUTPUT
-function display_output() {
-	local h=${1-10}
-	local w=${2-41}
-	local t=${3-Output}
-	dialog --backtitle "RalEExplorer" \
-		--title "${t}" \
-		--clear \
-		--msgbox "$(<$OUTPUT)" ${h} ${w}
+function display_file() {
+	# Parameters
+	local title=$1; shift
+	local file=$1; shift
+
+	# Terminal size
+	local cols="$(($(tput cols)-$LRMARGIN))"
+	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
+
+	folded=$(mktemp)
+	fold "$file" >"$folded"
+
+	dialog --backtitle "$BACKTITLE" \
+		--title "$title" \
+		--textbox "$folded" $lines $cols
+
+	rm "$folded"
 }
 
 # Present a menu of items and stash the user selection in $INPUT
@@ -34,19 +42,19 @@ function display_menu() {
 	# Terminal size
 	local cols="$(($(tput cols)-$LRMARGIN))"
 	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
-
+	local menulines=$(($lines-6))
 
 	if [ -z $cancelstring ]; then
 		dialog --backtitle "$BACKTITLE" \
 			--title "$title" \
 			--no-cancel \
-			--menu "" $lines $cols 30 \
+			--menu "" $lines $cols $menulines \
 			"${rows[@]}" 2>$INPUT
 	else
 		dialog --backtitle "$BACKTITLE" \
 			--title "$title" \
 			--cancel-label "$cancelstring" \
-			--menu "" $lines $cols 30 \
+			--menu "" $lines $cols $menulines \
 			"${rows[@]}" 2>$INPUT
 	fi
 }
@@ -61,18 +69,19 @@ function display_checklist() {
 	# Terminal size
 	local cols="$(($(tput cols)-$LRMARGIN))"
 	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
+	local menulines=$(($lines-6))
 
 	if [ -z $cancelstring ]; then
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
 			--no-cancel \
-			--checklist "" $lines $cols 30 \
+			--checklist "" $lines $cols $menulines \
 			"${rows[@]}" 2>$INPUT
 	else
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
 			--cancel-label "$cancelstring" \
-			--checklist "" $lines $cols 30 \
+			--checklist "" $lines $cols $menulines \
 			"${rows[@]}" 2>$INPUT
 	fi
 }
@@ -162,7 +171,6 @@ function prompt_topics() {
 	local filter=$(construct_filter "${fields[@]}")
 
 	# Scrape API data from `ral` tool
-	local n=0
 	while read -r value; do
 		topics+=("$value")
 	done < <(ral view --format=json "$continuity" "$year" |\
@@ -175,12 +183,30 @@ function prompt_topics() {
 	display_menu "$title" "$canceltext" "${topics[@]}"
 }
 
+function show_topic() {
+	# System parameters
+	local continuity="$1"; shift
+	local year="$1"; shift
+	local topic="$1"
+
+	local fields=("Id" "Content")
+	local filter=$(construct_filter "${fields[@]}")
+
+	f=$(mktemp)
+	ral view "$continuity" "$year" "$topic" >$f
+
+	display_file "[$continuity/$year/$topic]" "$f"
+	rm "$f"
+}
+
 # Simply demonstration...
 display_continuities
 continuity="$(<$INPUT)"
 prompt_years $continuity
 years="$(<$INPUT)"
 prompt_topics "$continuity" "$years"
+topic="$(<$INPUT)"
+show_topic "$continuity" "$years" "$topic"
 
 # Cleanup...
 rm -f $INPUT $OUTPUT
