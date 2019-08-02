@@ -22,14 +22,9 @@ function display_file() {
 	local cols="$(($(tput cols)-$LRMARGIN))"
 	local lines="$(($(tput lines)-$TOPBOTMARGIN))"
 
-	folded=$(mktemp)
-	fold "$file" >"$folded"
-
 	dialog --backtitle "$BACKTITLE" \
 		--title "$title" \
-		--textbox "$folded" $lines $cols
-
-	rm "$folded"
+		--textbox "$file" $lines $cols
 }
 
 # Present a menu of items and stash the user selection in $INPUT
@@ -189,11 +184,14 @@ function show_topic() {
 	local year="$1"; shift
 	local topic="$1"
 
+	# Text wrapping
+	local cols="$(($(tput cols)-$LRMARGIN-4))"
+
 	local fields=("Id" "Content")
 	local filter=$(construct_filter "${fields[@]}")
 
 	f=$(mktemp)
-	ral view "$continuity" "$year" "$topic" >$f
+	ral view --wrap="$cols" "$continuity" "$year" "$topic" >$f
 
 	display_file "[$continuity/$year/$topic]" "$f"
 	rm "$f"
