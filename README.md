@@ -1,7 +1,7 @@
 RalEExplorer (TUI utility)
 ==========================
 
-![RalEExplorer](https://wesleycoakley.com/git/raleexplorer.png)
+![RalEExplorer](https://cdn.wesleycoakley.com/git/raleexplorer.png)
 
 RalEExplorer is a terminal user-interface which uses the
 [`ral`](https://github.com/wesleycoakley/ral) command-line utility to allow
