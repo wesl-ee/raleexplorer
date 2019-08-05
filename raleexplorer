@@ -43,14 +43,16 @@ function display_menu() {
 		dialog --backtitle "$BACKTITLE" \
 			--title "$title" \
 			--no-cancel \
+			--stdout \
 			--menu "" $lines $cols $menulines \
-			"${rows[@]}" 2>$INPUT
+			"${rows[@]}"
 	else
 		dialog --backtitle "$BACKTITLE" \
 			--title "$title" \
 			--cancel-label "$cancelstring" \
+			--stdout \
 			--menu "" $lines $cols $menulines \
-			"${rows[@]}" 2>$INPUT
+			"${rows[@]}"
 	fi
 }
 
@@ -70,14 +72,16 @@ function display_checklist() {
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
 			--no-cancel \
+			--stdout \
 			--checklist "" $lines $cols $menulines \
-			"${rows[@]}" 2>$INPUT
+			"${rows[@]}"
 	else
 		dialog --backtitle "$backtitle" \
 			--title "$title" \
+			--stdout \
 			--cancel-label "$cancelstring" \
 			--checklist "" $lines $cols $menulines \
-			"${rows[@]}" 2>$INPUT
+			"${rows[@]}"
 	fi
 }
 
@@ -197,14 +201,39 @@ function show_topic() {
 	rm "$f"
 }
 
-# Simply demonstration...
-display_continuities
-continuity="$(<$INPUT)"
-prompt_years $continuity
-years="$(<$INPUT)"
-prompt_topics "$continuity" "$years"
-topic="$(<$INPUT)"
-show_topic "$continuity" "$years" "$topic"
+# Initial condition
+STATE="browse-all"
+
+# User-navigation loop
+while [ "$STATE" != "quit" ]; do case "$STATE" in
+	browse-all)
+		continuity="$(display_continuities)"
+		if [ "$continuity" ]; then
+			STATE="browse-continuity"
+		else
+			STATE="quit"
+		fi
+		;;
+	browse-continuity)
+		years="$(prompt_years "$continuity")"
+		if [ "$years" ]; then
+			STATE="browse-year"
+		else
+			STATE="browse-all"
+		fi
+		;;
+	browse-year)
+		topic="$(prompt_topics "$continuity" "$years")"
+		if [ "$topic" ]; then
+			STATE="read-topic"
+		else
+			STATE="browse-continuity"
+		fi
+		;;
+	read-topic)
+		show_topic "$continuity" "$years" "$topic"
+		STATE="browse-year"
+esac; done
 
 # Cleanup...
 rm -f $INPUT $OUTPUT
